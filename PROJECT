@@ -1,4 +1,4 @@
-domain: my.domain
+domain: kathisto.oconnormi.io
 layout:
 - go.kubebuilder.io/v3
 plugins:
@@ -6,4 +6,13 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: kathisto
 repo: github.com/oconnormi/kathisto
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kathisto.oconnormi.io
+  kind: Template
+  path: github.com/oconnormi/kathisto/api/v1beta1
+  version: v1beta1
 version: "3"

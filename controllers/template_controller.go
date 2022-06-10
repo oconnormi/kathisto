@@ -17,9 +17,14 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	tpl "text/template"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -54,6 +59,56 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := r.Get(ctx, req.NamespacedName, &template); err != nil {
 		log.Error(err, "unable to fetch Template")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	inputContents := make(map[string]interface{})
+
+	// Get all template inputs
+	for _, input := range template.Spec.Inputs {
+		inputFilter := types.NamespacedName{Namespace: req.Namespace, Name: input.Name}
+		if input.Type == "secret" {
+			var secretInput corev1.Secret
+			if err := r.Get(ctx, inputFilter, &secretInput); err != nil {
+				log.Error(err, "unable to fetch secret input")
+				return ctrl.Result{}, err
+			}
+			inputContents[secretInput.Name] = secretInput.Data
+		}
+		if input.Type == "configmap" {
+			var configmapInput corev1.ConfigMap
+			if err := r.Get(ctx, inputFilter, &configmapInput); err != nil {
+				log.Error(err, "unable to fetch configmap input")
+				return ctrl.Result{}, err
+			}
+			inputContents[configmapInput.Name] = configmapInput.Data
+		}
+	}
+
+	// Get source
+	var source corev1.ConfigMap
+	sourceFilter := types.NamespacedName{Name: template.Spec.Source.Name, Namespace: req.Namespace}
+	if err := r.Get(ctx, sourceFilter, &source); err != nil {
+		log.Error(err, "unable to fetch source configmap")
+		return ctrl.Result{}, err
+	}
+	output := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      template.Spec.Output,
+			Namespace: req.Namespace,
+		},
+		Data: make(map[string][]byte),
+	}
+
+	for name, sourceTemplate := range source.Data {
+		current, err := tpl.New(name).Parse(sourceTemplate)
+		if err != nil {
+			log.Error(err, "unable to parse template")
+		}
+		var tplOutput bytes.Buffer
+		if err := current.Execute(&tplOutput, inputContents); err != nil {
+			log.Error(err, "unable to execute template")
+		}
+		output.Data[name] = tplOutput.Bytes()
 	}
 
 	return ctrl.Result{}, nil

@@ -36,6 +36,8 @@ spec:
             description: TemplateSpec defines the desired state of Template
             properties:
               inputs:
+                description: Inputs describes the set of secrets and configmaps to
+                  add to the template variables.
                 items:
                   description: Input describes a source of variables that will be
                     supplied to the template during rendering
@@ -50,11 +52,22 @@ spec:
                       description: Ref identifies the source of the input.
                       type: string
                     type:
+                      default: secret
                       description: Type identifies the type of the input. e.g. configmap,
                         secret
+                      enum:
+                      - secret
+                      - configmap
                       type: string
+                  required:
+                  - name
+                  - type
                   type: object
                 type: array
+              output:
+                description: Output is the name of the secret to store the rendered
+                  template(s) output in.
+                type: string
               source:
                 description: Source describes where to find the source template. This
                   can be any ConfigMap in the same namespace as this resource.
@@ -70,7 +83,13 @@ spec:
                       as the Template resource that will be used as the source of
                       the template.
                     type: string
+                required:
+                - name
                 type: object
+            required:
+            - inputs
+            - output
+            - source
             type: object
           status:
             description: TemplateStatus defines the observed state of Template

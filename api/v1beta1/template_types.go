@@ -26,7 +26,10 @@ import (
 // Source describes the location of the template source in the same namespace
 type Source struct {
 	// Name identifies the ConfigMap in the same Namespace as the Template resource that will be used as the source of the template.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
+
+	// +kubebuilder:validation:Optional
+
 	// Keys identifies the items in the ConfigMap that will be treated as template sources. If empty all keys will be used.
 	Keys []string `json:"keys,omitempty"`
 }
@@ -34,9 +37,16 @@ type Source struct {
 // Input describes a source of variables that will be supplied to the template during rendering
 type Input struct {
 	// Ref identifies the source of the input.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
+
+	// +kubebuilder:validation:Enum=secret;configmap
+	// +kubebuilder:default=secret
+
 	// Type identifies the type of the input. e.g. configmap, secret
-	Type string `json:"type,omitempty"`
+	Type string `json:"type"`
+
+	// +kubebuilder:validation:Optional
+
 	// keys identifies the items in the input that will be treated as input variables. If empty all keys will be used.
 	Keys []string `json:"keys,omitempty"`
 }
@@ -47,8 +57,13 @@ type TemplateSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Source describes where to find the source template. This can be any ConfigMap in the same namespace as this resource.
-	Source Source  `json:"source,omitempty"`
-	Inputs []Input `json:"inputs,omitempty"`
+	Source Source `json:"source"`
+
+	// Inputs describes the set of secrets and configmaps to add to the template variables.
+	Inputs []Input `json:"inputs"`
+
+	// Output is the name of the secret to store the rendered template(s) output in.
+	Output string `json:"output"`
 }
 
 // TemplateStatus defines the observed state of Template

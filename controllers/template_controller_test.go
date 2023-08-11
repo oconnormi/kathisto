@@ -2,8 +2,9 @@ package controllers
 
 import (
 	"context"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,9 @@ var _ = Describe("Template controller", func() {
 	const (
 		TemplateName      = "test-template"
 		TemplateNamespace = "default"
+		timeout           = time.Second * 10
+		duration          = time.Second * 10
+		interval          = time.Millisecond * 250
 	)
 
 	Context("When rendering a single template with a single input", func() {
@@ -78,6 +82,13 @@ var _ = Describe("Template controller", func() {
 			Expect(k8sClient.Create(ctx, template)).Should(Succeed())
 			outputFilter := types.NamespacedName{Namespace: TemplateNamespace, Name: "test-output"}
 			var output corev1.Secret
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, outputFilter, &output)
+				if err != nil {
+					return false
+				}
+				return true
+			}, timeout, interval).Should(BeTrue())
 			Expect(k8sClient.Get(ctx, outputFilter, &output)).Should(Succeed())
 			expexted := map[string]string{}
 			expexted["foo.yaml"] = "bar-qux"

@@ -53,7 +53,7 @@ var _ = Describe("Template controller", func() {
 					Namespace: TemplateNamespace,
 				},
 				Data: map[string]string{
-					"foo.yaml": "{{ .test-input.foo }}-{{ .test-input.baz }}",
+					"foo.yaml": "{{ .test_input.foo }}-{{ .test_input.baz }}",
 				},
 			}
 			Expect(k8sClient.Create(ctx, &source)).Should(Succeed())
@@ -89,10 +89,8 @@ var _ = Describe("Template controller", func() {
 				}
 				return true
 			}, timeout, interval).Should(BeTrue())
-			Expect(k8sClient.Get(ctx, outputFilter, &output)).Should(Succeed())
-			expexted := map[string]string{}
-			expexted["foo.yaml"] = "bar-qux"
-			Expect(output.Data).Should(ConsistOf(expexted))
+			actual := output.Data["foo.yaml"]
+			Expect(string(actual)).Should(Equal("bar-qux"))
 		})
 	})
 })

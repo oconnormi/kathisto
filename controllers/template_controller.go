@@ -19,6 +19,7 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"strings"
 	tpl "text/template"
 
 	corev1 "k8s.io/api/core/v1"
@@ -72,15 +73,17 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "unable to fetch secret input")
 				return ctrl.Result{}, err
 			}
-			inputContents[secretInput.Name] = secretInput.Data
+			vars := secretToVars(secretInput)
+			inputContents[strings.ReplaceAll(input.Name, "-", "_")] = vars
 		}
 		if input.Type == "configmap" {
 			var configmapInput corev1.ConfigMap
 			if err := r.Get(ctx, inputFilter, &configmapInput); err != nil {
-				log.Error(err, "unable to fetch configmap input")
+				log.Error(err, "unable to fetch input configmap")
 				return ctrl.Result{}, err
 			}
-			inputContents[configmapInput.Name] = configmapInput.Data
+			vars := configMapToVars(configmapInput)
+			inputContents[configmapInput.Name] = vars
 		}
 	}
 
@@ -91,27 +94,63 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(err, "unable to fetch source configmap")
 		return ctrl.Result{}, err
 	}
-	output := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      template.Spec.Output,
-			Namespace: req.Namespace,
-		},
-		Data: make(map[string][]byte),
+
+	var output corev1.Secret
+	outputFilter := types.NamespacedName{Name: template.Spec.Output, Namespace: req.Namespace}
+	if err := r.Get(ctx, outputFilter, &output); err != nil {
+		log.Info("output secret {secret} doesn't exist, creating")
+
+		output = corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      template.Spec.Output,
+				Namespace: req.Namespace,
+			},
+			Data: make(map[string][]byte),
+		}
+		if err := r.Create(ctx, &output); err != nil {
+			log.Error(err, "unable to create output secret")
+			return ctrl.Result{}, err
+		}
 	}
 
 	for name, sourceTemplate := range source.Data {
 		current, err := tpl.New(name).Parse(sourceTemplate)
 		if err != nil {
 			log.Error(err, "unable to parse template")
+			return ctrl.Result{}, err
 		}
-		var tplOutput bytes.Buffer
-		if err := current.Execute(&tplOutput, inputContents); err != nil {
+		tplOutput := &bytes.Buffer{}
+		if err := current.Execute(tplOutput, &inputContents); err != nil {
 			log.Error(err, "unable to execute template")
+		}
+		if output.Data == nil {
+			output.Data = make(map[string][]byte)
 		}
 		output.Data[name] = tplOutput.Bytes()
 	}
 
+	if err := r.Update(ctx, &output); err != nil {
+		log.Error(err, "unable to update output secret")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func secretToVars(secret corev1.Secret) map[string]interface{} {
+	vars := make(map[string]interface{})
+	for key, value := range secret.Data {
+		vars[key] = string(value)
+	}
+	return vars
+}
+
+func configMapToVars(configMap corev1.ConfigMap) map[string]interface{} {
+	vars := make(map[string]interface{})
+	for key, value := range configMap.Data {
+		vars[key] = string(value)
+	}
+	return vars
 }
 
 // SetupWithManager sets up the controller with the Manager.
